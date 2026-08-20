@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self';">
+<title>PokeRevolution Packs</title>
+
+<link rel="stylesheet" href="css/theme.css">
+<link rel="stylesheet" href="css/app.css">
+
+<!-- Holographic effects, ported from simeydotme/pokemon-cards-css (MIT). -->
+<link rel="stylesheet" href="css/holo/base.css">
+<link rel="stylesheet" href="css/holo/vars.css">
+<link rel="stylesheet" href="css/holo/reverse-holo.css">
+<link rel="stylesheet" href="css/holo/regular-holo.css">
+<link rel="stylesheet" href="css/holo/v-regular.css">
+<link rel="stylesheet" href="css/holo/v-full-art.css">
+<link rel="stylesheet" href="css/holo/trainer-full-art.css">
+<link rel="stylesheet" href="css/holo/trainer-gallery-holo.css">
+<link rel="stylesheet" href="css/holo/trainer-gallery-secret-rare.css">
+<link rel="stylesheet" href="css/holo/rainbow-alt.css">
+<link rel="stylesheet" href="css/holo/secret-rare.css">
+</head>
+<body>
+
+<div id="shell">
+  <header class="topbar">
+    <div class="brand"><span class="ball"></span> POKEREVOLUTION PACKS</div>
+
+    <nav class="tabs" id="tabs">
+      <button data-view="open" class="active">Open</button>
+      <button data-view="binder">Binder</button>
+      <button data-view="odds">Odds</button>
+      <button data-view="progress">PRO Link</button>
+    </nav>
+
+    <div class="spacer"></div>
+
+    <div class="readout">
+      <div class="stat">
+        <span class="label">Packs</span>
+        <span class="value gold" id="rd-packs">0</span>
+      </div>
+      <div class="stat">
+        <span class="label">Collection</span>
+        <span class="value" id="rd-cards">0</span>
+      </div>
+      <div class="stat">
+        <span class="label">Market Value</span>
+        <span class="value green" id="rd-value">$0</span>
+      </div>
+    </div>
+  </header>
+
+  <main id="view"></main>
+</div>
+
+<div class="toast-host" id="toasts"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

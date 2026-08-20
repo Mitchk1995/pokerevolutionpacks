@@ -3,3 +3,5 @@ dist/
 tools/_numbers.json
 *.log
 .DS_Store
+shots/
+tools/_rules.json

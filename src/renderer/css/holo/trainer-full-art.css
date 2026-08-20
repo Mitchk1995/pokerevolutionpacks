@@ -1,0 +1,102 @@
+/* ---------------------------------------------------------------------------
+ * trainer-full-art.css
+ *
+ * Ported from simeydotme/pokemon-cards-css (MIT) by tools/port_holo_css.py.
+ * The gradients, blend modes and filters are upstream's; only the selectors
+ * were rewritten from `data-rarity` to this app's `data-foil` values:
+ *   rare ultra -> ultra-rare
+ * ------------------------------------------------------------------------- */
+
+/*
+
+  ULTRA RARE (FULL ART TRAINER)
+  some styles inherited from v-full-art.css
+
+*/
+
+
+
+
+
+/*
+
+  SHINE LAYERS
+
+*/
+
+.card[data-supertype="trainer"][data-foil="ultra-rare"] .card__shine {
+  
+  filter: brightness(calc((var(--pointer-from-center)*0.05) + .8)) contrast(1.75) saturate(1.2);
+
+}
+
+.card[data-supertype="trainer"][data-foil="ultra-rare"] .card__shine:after {
+
+  filter: brightness(calc((var(--pointer-from-center)*.4) + .85)) contrast(2) saturate(.5);
+
+}
+
+.card[data-supertype="trainer"][data-foil="ultra-rare"] .card__shine:before {
+
+  background-image: 
+    radial-gradient( 
+      farthest-corner circle at var(--pointer-x) var(--pointer-y), 
+      hsl(0, 0%, 100%) 0%, 
+      hsla(0, 0%, 0%, 0) 80% 
+    );
+  
+  mix-blend-mode: screen;
+  opacity: 0.5;
+  
+}
+
+
+
+
+
+
+
+
+
+
+/*
+
+  GLARE LAYERS
+
+*/
+
+.card[data-foil="ultra-rare"][data-supertype="trainer"] .card__glare {
+
+  opacity: calc( var(--card-opacity) * .75 );
+  mix-blend-mode: multiply;
+  filter: brightness(1.5) contrast(1.4) saturate(1);
+  background-size: 170% 170%;
+
+}
+
+
+
+
+
+
+
+
+
+
+/*
+
+  NO MASK
+
+*/
+
+.card:not(.masked)[data-supertype="trainer"][data-foil="ultra-rare"] .card__shine,
+.card:not(.masked)[data-supertype="trainer"][data-foil="ultra-rare"] .card__shine:after {
+
+  --mask: none;
+  --foil: url("../../../../assets/holo/trainerbg.png"); 
+  --imgsize: 20%;
+  
+  background-blend-mode: color-burn, hue, hard-light;
+  filter: brightness(calc((var(--pointer-from-center)*0.05) + .6)) contrast(1.5) saturate(1.2);
+
+}
