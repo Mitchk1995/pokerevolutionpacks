@@ -7,6 +7,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { DEFAULT_RULES } from '../src/main/store.js';
+
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = process.env.SHOT_DIR || path.join(ROOT, 'shots');
 fs.mkdirSync(OUT, { recursive: true });
@@ -44,7 +46,7 @@ ipcMain.handle('pack:record', (_e, pack) => {
 });
 ipcMain.handle('packs:add', () => wallet);
 ipcMain.handle('tracker:get', () => ({
-  enabled: false, logDir: '', rules: readJson(path.join(ROOT, 'tools/_rules.json')),
+  enabled: false, logDir: '', rules: DEFAULT_RULES,
   progress: {}, feed: [], suggestions: [],
 }));
 ipcMain.handle('tracker:set', () => ({ tracker: {}, status: { ok: false, reason: 'disabled' } }));

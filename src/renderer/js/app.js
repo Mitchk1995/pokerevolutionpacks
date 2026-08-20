@@ -1,6 +1,6 @@
 /** App shell: boot, tab routing, and the header readout. */
 import { el, money, toast } from './util.js';
-import { app, boot, subscribe, notify, collectionValue, collectionCount, uniqueCardsOwned } from './store.js';
+import { app, boot, subscribe, notify, collectionValue, uniqueCardsOwned } from './store.js';
 import { renderOpen } from './views/open.js';
 import { renderBinder } from './views/binder.js';
 import { renderOdds } from './views/odds.js';

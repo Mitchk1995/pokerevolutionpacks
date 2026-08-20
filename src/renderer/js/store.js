@@ -85,12 +85,6 @@ export function collectionValue() {
   return total;
 }
 
-export function collectionCount() {
-  let total = 0;
-  for (const e of ownedEntries()) total += e.count;
-  return total;
-}
-
 /** Distinct cards owned in any printing, for set completion. */
 export function uniqueCardsOwned() {
   const set = new Set();

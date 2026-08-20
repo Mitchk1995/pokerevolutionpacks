@@ -5,7 +5,7 @@
  */
 import { el, money, label, BURST, toast } from '../util.js';
 import { createCard } from '../card.js';
-import { app, openOnePack, priceOf } from '../store.js';
+import { app, openOnePack } from '../store.js';
 import { showCard } from './inspect.js';
 
 const ASSETS = '../../assets';

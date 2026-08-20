@@ -148,7 +148,6 @@ function rulesPanel() {
       list.append(el('div', { class: 'rule-row' },
         on,
         el('div', { class: 'rl-label' }, rule.label,
-          el('small', {}, pattern.value),
           progress ? el('small', { class: 'faint' }, `${progress.hits} matches, ${progress.awarded} packs awarded`) : null),
         num('packs', 1), num('everyN', 1), num('cooldownSec'), num('dailyCap')));
 

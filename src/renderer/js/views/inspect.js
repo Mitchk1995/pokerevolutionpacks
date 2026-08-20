@@ -1,7 +1,7 @@
 /** Full-screen card inspector: the holo card at size, plus every printing's price. */
 import { el, money, label, PRINTING_LABEL } from '../util.js';
 import { createCard } from '../card.js';
-import { app, priceRow, priceOf } from '../store.js';
+import { app, priceRow } from '../store.js';
 
 const ASSETS = '../../assets';
 
