@@ -64,6 +64,12 @@ async function main() {
   });
 
   go('open');
+  if (app.state.recovery) {
+    const detail = app.state.recovery.backup
+      ? `The damaged file was preserved as ${app.state.recovery.backup}.`
+      : 'The damaged file could not be copied; avoid closing the app until you locate it.';
+    toast('SAVE RECOVERED', `A damaged save could not be loaded. ${detail}`);
+  }
 }
 
 main();

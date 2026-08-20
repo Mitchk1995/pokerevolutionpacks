@@ -58,7 +58,11 @@ function showIdle(stage, hud, root) {
     if (app.state.wallet.packs <= 0) return;
     btn.disabled = true;
     const pack = await openOnePack();
-    if (!pack) { btn.disabled = false; return; }
+    if (!pack) {
+      btn.disabled = app.state.wallet.packs <= 0;
+      toast('PACK NOT OPENED', 'Nothing was spent. Try again, or restart the app if the problem continues.');
+      return;
+    }
     runReveal(stage, hud, root, pack);
   };
 

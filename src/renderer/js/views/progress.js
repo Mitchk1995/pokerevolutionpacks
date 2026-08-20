@@ -206,7 +206,9 @@ function testerPanel() {
 /* ---------------------------------------------------------------- manual */
 
 function manualPanel() {
-  const n = el('input', { type: 'number', min: '1', value: '1', style: 'width:90px' });
+  const n = el('input', {
+    type: 'number', min: '1', max: '10000', step: '1', value: '1', style: 'width:90px',
+  });
   const why = el('input', { type: 'text', placeholder: 'what did you do?', value: '' });
   return el('div', { class: 'panel' },
     el('h3', {}, 'ADD PACKS BY HAND'),
@@ -218,8 +220,13 @@ function manualPanel() {
       el('button', {
         class: 'btn primary',
         onclick: async () => {
-          const count = Math.max(1, Number(n.value) || 1);
-          app.state.wallet = await window.api.addPacks(count, why.value.trim() || 'Added by hand');
+          const count = Number(n.value);
+          const result = await window.api.addPacks(count, why.value.trim() || 'Added by hand');
+          if (!result.ok) {
+            toast('PACKS NOT ADDED', result.error);
+            return;
+          }
+          app.state.wallet = result.wallet;
           why.value = '';
           notify();
           toast('PACKS ADDED', `${count} pack${count === 1 ? '' : 's'} added to your wallet.`);

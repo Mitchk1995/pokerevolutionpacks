@@ -2,86 +2,105 @@ name: Build
 
 on:
   push:
-    branches: ['**']
+    branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: Odds tests
+    name: Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      # The odds engine is dependency-free, so the statistical suite runs
-      # without installing anything.
-      - name: Verify pull rates over 1,000,000 simulated packs
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Verify release tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          expected="v$(node -p 'require("./package.json").version')"
+          if [[ "$GITHUB_REF_NAME" != "$expected" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $expected"
+            exit 1
+          fi
+
+      - name: Run unit and statistical tests
         run: npm test
 
   windows:
-    name: Windows executable
+    name: Windows executables
+    if: github.event_name != 'pull_request'
     needs: test
     runs-on: windows-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.12.0
           cache: npm
 
       - run: npm ci
 
-      - name: Build installer and portable exe
+      - name: Build installer and portable executable
         run: npm run dist
 
-      - name: List what was built
-        shell: bash
-        run: ls -lh dist/*.exe
+      - name: Verify packaged files
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $expected = @(
+            "PokeRevolution-Packs-$version-x64.exe"
+            "PokeRevolution-Packs-$version-portable.exe"
+          )
+          foreach ($name in $expected) {
+            if (-not (Test-Path -LiteralPath (Join-Path dist $name))) {
+              throw "Missing packaged file: $name"
+            }
+          }
+          Get-ChildItem dist -Filter *.exe | Select-Object Name, Length
 
       - uses: actions/upload-artifact@v4
         with:
           name: PokeRevolution-Packs-windows
           path: dist/*.exe
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 14
 
-      # Publish the exes to a real Release so they have permanent, public
-      # download links rather than living inside a workflow artifact zip.
-      # The action creates the tag itself, so this needs no tag push.
-      - name: Publish release
-        if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
+  release:
+    name: GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          tag_name: v1.0.0
-          name: PokeRevolution Packs v1.0.0
-          make_latest: true
-          files: dist/*.exe
-          body: |
-            **Ascended Heroes pack simulator** — real pull rates, real holo foil,
-            a collection binder with market values, and pack rewards earned from
-            Pokémon Revolution Online progress.
+          name: PokeRevolution-Packs-windows
+          path: dist
 
-            ### Download
-
-            - **`PokeRevolution.Packs-1.0.0-portable.exe`** — no install, just run it.
-            - **`PokeRevolution.Packs-1.0.0-x64.exe`** — installer, adds a Start Menu shortcut.
-
-            Windows SmartScreen will warn on first launch because the app isn't
-            code-signed. Click **More info → Run anyway**.
-
-            Everything is bundled — all 295 card images ship inside the app, so it
-            works offline. Prices only fetch when you press **Refresh Prices**.
-
-            ### Pack odds
-
-            Scarlet & Violet pack structure with the pull rates TCGplayer measured
-            over 2,000+ packs. Verified over 1,000,000 simulated packs on every build:
-            Double Rare 1 in 5, Illustration Rare 1 in 9, Ultra Rare 1 in 21,
-            Mega Attack Rare 1 in 29, Special Illustration Rare 1 in 70,
-            Mega Hyper Rare 1 in 540, plus god packs at ~1 in 1,000.
-
-            Full derivation and sources in [docs/PULL-RATES.md](https://github.com/Mitchk1995/pokerevolutionpacks/blob/main/docs/PULL-RATES.md).
+      - name: Publish tagged release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/*.exe --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$GITHUB_REF_NAME" dist/*.exe \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "PokeRevolution Packs $GITHUB_REF_NAME" \
+              --generate-notes
+          fi

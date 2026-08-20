@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="PokeRevolution Packs">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#292340"/>
+      <stop offset="1" stop-color="#12101c"/>
+    </linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff6848"/>
+      <stop offset="1" stop-color="#e3350d"/>
+    </linearGradient>
+    <clipPath id="ball">
+      <circle cx="512" cy="526" r="260"/>
+    </clipPath>
+  </defs>
+
+  <rect x="36" y="36" width="952" height="952" rx="196" fill="url(#bg)" stroke="#ffcb05" stroke-width="36"/>
+
+  <g opacity="0.95" stroke="#0c0b12" stroke-width="28">
+    <rect x="282" y="154" width="460" height="690" rx="52" fill="#3d7dca" transform="rotate(-9 512 499)"/>
+    <rect x="282" y="154" width="460" height="690" rx="52" fill="#625594" transform="rotate(9 512 499)"/>
+    <rect x="282" y="154" width="460" height="690" rx="52" fill="#201b31"/>
+  </g>
+
+  <g clip-path="url(#ball)">
+    <rect x="252" y="266" width="520" height="260" fill="url(#red)"/>
+    <rect x="252" y="526" width="520" height="260" fill="#f5f5f5"/>
+  </g>
+  <circle cx="512" cy="526" r="260" fill="none" stroke="#0c0b12" stroke-width="38"/>
+  <rect x="252" y="500" width="520" height="52" fill="#0c0b12"/>
+  <circle cx="512" cy="526" r="92" fill="#f5f5f5" stroke="#0c0b12" stroke-width="34"/>
+  <circle cx="512" cy="526" r="36" fill="#ffcb05"/>
+</svg>

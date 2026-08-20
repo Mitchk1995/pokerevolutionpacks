@@ -9,6 +9,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const CURRENT_VERSION = 1;
+export const MAX_PACK_GRANT = 10_000;
+
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+function boundedInteger(value, fallback, min = 0, max = Number.MAX_SAFE_INTEGER) {
+  if (value === null || value === '' || typeof value === 'boolean') return fallback;
+  const number = Number(value);
+  if (!Number.isSafeInteger(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
 
 export const DEFAULT_RULES = [
   {
@@ -73,6 +83,29 @@ export const DEFAULT_RULES = [
   },
 ];
 
+const freshRules = () => DEFAULT_RULES.map((rule) => ({ ...rule }));
+
+/** Keep persisted/user-edited rules finite and safe to apply to the wallet. */
+export function normalizeRules(rules) {
+  if (!Array.isArray(rules) || rules.length === 0) return freshRules();
+
+  return rules.slice(0, 100).map((raw, index) => {
+    const rule = isObject(raw) ? raw : {};
+    const fallback = DEFAULT_RULES.find((candidate) => candidate.id === rule.id) || {};
+    const id = String(rule.id || fallback.id || `rule-${index + 1}`).slice(0, 64);
+    return {
+      id,
+      label: String(rule.label || fallback.label || id).slice(0, 120),
+      pattern: String(rule.pattern ?? fallback.pattern ?? '(?!)').slice(0, 2_000),
+      packs: boundedInteger(rule.packs, fallback.packs || 1, 1, MAX_PACK_GRANT),
+      everyN: boundedInteger(rule.everyN, fallback.everyN || 1, 1, 1_000_000),
+      cooldownSec: boundedInteger(rule.cooldownSec, fallback.cooldownSec || 0, 0, 31_536_000),
+      dailyCap: boundedInteger(rule.dailyCap, fallback.dailyCap ?? MAX_PACK_GRANT, 0, MAX_PACK_GRANT),
+      enabled: rule.enabled !== false,
+    };
+  });
+}
+
 function emptyState() {
   return {
     version: CURRENT_VERSION,
@@ -85,18 +118,74 @@ function emptyState() {
     tracker: {
       enabled: false,
       logDir: '',
-      rules: DEFAULT_RULES,
+      rules: freshRules(),
       progress: {},   // ruleId -> { hits, awarded, lastAwardAt, day, dayCount }
       offsets: {},    // filePath -> bytes already read
+      fileState: {},  // filePath -> identity + tail checkpoint for rotation detection
       feed: [],
     },
   };
+}
+
+function normalizeState(raw) {
+  const parsed = isObject(raw) ? raw : {};
+  const base = emptyState();
+  const wallet = isObject(parsed.wallet) ? parsed.wallet : {};
+  const stats = isObject(parsed.stats) ? parsed.stats : {};
+  const tracker = isObject(parsed.tracker) ? parsed.tracker : {};
+
+  const state = {
+    ...base,
+    ...parsed,
+    version: CURRENT_VERSION,
+    wallet: {
+      packs: boundedInteger(wallet.packs, base.wallet.packs),
+      lifetimeEarned: boundedInteger(wallet.lifetimeEarned, base.wallet.lifetimeEarned),
+      lifetimeOpened: boundedInteger(wallet.lifetimeOpened, base.wallet.lifetimeOpened),
+    },
+    collection: isObject(parsed.collection) ? parsed.collection : {},
+    stats: {
+      byRarity: isObject(stats.byRarity) ? stats.byRarity : {},
+      godPacks: boundedInteger(stats.godPacks, 0),
+      packsOpened: boundedInteger(stats.packsOpened, 0),
+    },
+    history: Array.isArray(parsed.history) ? parsed.history.slice(0, 500) : [],
+    tracker: {
+      ...base.tracker,
+      ...tracker,
+      enabled: tracker.enabled === true,
+      logDir: typeof tracker.logDir === 'string' ? tracker.logDir : '',
+      rules: normalizeRules(tracker.rules),
+      progress: isObject(tracker.progress) ? tracker.progress : {},
+      offsets: isObject(tracker.offsets) ? tracker.offsets : {},
+      fileState: isObject(tracker.fileState) ? tracker.fileState : {},
+      feed: Array.isArray(tracker.feed) ? tracker.feed.slice(0, 200) : [],
+    },
+  };
+
+  for (const [key, entry] of Object.entries(state.collection)) {
+    if (!isObject(entry)) {
+      delete state.collection[key];
+      continue;
+    }
+    entry.count = boundedInteger(entry.count, 1, 1);
+    entry.firstAt = boundedInteger(entry.firstAt, Date.now(), 0);
+  }
+
+  for (const [file, offset] of Object.entries(state.tracker.offsets)) {
+    const clean = boundedInteger(offset, -1, 0);
+    if (clean < 0) delete state.tracker.offsets[file];
+    else state.tracker.offsets[file] = clean;
+  }
+
+  return state;
 }
 
 export class Store {
   constructor(file) {
     this.file = file;
     this.state = emptyState();
+    this.recovery = null;
     this._timer = null;
     this.load();
   }
@@ -105,17 +194,21 @@ export class Store {
     try {
       const raw = fs.readFileSync(this.file, 'utf8');
       const parsed = JSON.parse(raw);
-      this.state = { ...emptyState(), ...parsed };
-      // Merge nested defaults so an older save picks up new fields.
-      const base = emptyState();
-      for (const key of ['wallet', 'stats', 'tracker']) {
-        this.state[key] = { ...base[key], ...(parsed[key] || {}) };
+      this.state = normalizeState(parsed);
+    } catch (error) {
+      // Missing is a normal first launch. Preserve any unreadable/corrupt save
+      // before starting clean so a later save cannot destroy the only copy.
+      if (error?.code !== 'ENOENT') {
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backup = `${this.file}.corrupt-${stamp}.bak`;
+        try {
+          fs.mkdirSync(path.dirname(this.file), { recursive: true });
+          fs.copyFileSync(this.file, backup, fs.constants.COPYFILE_EXCL);
+          this.recovery = { backup: path.basename(backup) };
+        } catch {
+          this.recovery = { backup: null };
+        }
       }
-      if (!Array.isArray(this.state.tracker.rules) || this.state.tracker.rules.length === 0) {
-        this.state.tracker.rules = DEFAULT_RULES;
-      }
-    } catch {
-      // No save yet, or an unreadable one - start clean rather than crash.
       this.state = emptyState();
     }
     return this.state;
@@ -175,13 +268,15 @@ export class Store {
   }
 
   addPacks(n, reason) {
+    if (!Number.isSafeInteger(n) || n < 1 || n > MAX_PACK_GRANT) return false;
     this.state.wallet.packs += n;
     this.state.wallet.lifetimeEarned += n;
     if (reason) {
-      this.state.tracker.feed.unshift({ at: Date.now(), packs: n, reason });
+      this.state.tracker.feed.unshift({ at: Date.now(), packs: n, reason: String(reason).slice(0, 240) });
       if (this.state.tracker.feed.length > 200) this.state.tracker.feed.length = 200;
     }
     this.saveSoon();
+    return true;
   }
 
   spendPack() {

@@ -93,17 +93,12 @@ export function uniqueCardsOwned() {
 }
 
 export async function openOnePack() {
-  const spend = await window.api.spendPack();
-  if (!spend.ok) return null;
-  app.state.wallet = spend.wallet;
-
-  const pack = app.engine.openPack();
-  const result = await window.api.recordPack({
-    godPack: pack.godPack,
-    cards: pack.cards.map((c) => ({
-      n: c.n, printing: c.printing, rarity: c.rarity,
-    })),
-  });
+  const result = await window.api.openPack();
+  if (!result.ok) {
+    if (result.wallet) app.state.wallet = result.wallet;
+    return null;
+  }
+  const pack = result.pack;
 
   app.state.wallet = result.wallet;
   app.state.stats = result.stats;

@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { DEFAULT_RULES } from '../src/main/store.js';
+import { PackEngine } from '../src/shared/pack-engine.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = process.env.SHOT_DIR || path.join(ROOT, 'shots');
@@ -20,31 +21,40 @@ protocol.registerSchemesAsPrivileged([{
 
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
 const errors = [];
+const data = {
+  cards: readJson(path.join(ROOT, 'data/cards.me2pt5.json')),
+  model: readJson(path.join(ROOT, 'data/pack-model.me2pt5.json')),
+  prices: readJson(path.join(ROOT, 'data/prices.json')),
+};
+const engine = new PackEngine({ cards: data.cards.cards, model: data.model });
 
 // Minimal in-memory stand-ins for the real IPC handlers.
 let wallet = { packs: 25, lifetimeEarned: 25, lifetimeOpened: 0 };
 const collection = {};
-ipcMain.handle('data:load', () => ({
-  cards: readJson(path.join(ROOT, 'data/cards.me2pt5.json')),
-  model: readJson(path.join(ROOT, 'data/pack-model.me2pt5.json')),
-  prices: readJson(path.join(ROOT, 'data/prices.json')),
-}));
+ipcMain.handle('data:load', () => data);
 ipcMain.handle('state:get', () => ({
   wallet, collection, stats: { byRarity: {}, godPacks: 0, packsOpened: 0 },
   history: [],
   tracker: { enabled: false, logDir: '', rules: [], progress: {}, feed: [] },
 }));
-ipcMain.handle('pack:spend', () => { wallet.packs -= 1; return { ok: true, wallet }; });
-ipcMain.handle('pack:record', (_e, pack) => {
+ipcMain.handle('pack:open', () => {
+  if (wallet.packs <= 0) return { ok: false, wallet };
+  wallet.packs -= 1;
+  wallet.lifetimeOpened += 1;
+  const pack = engine.openPack();
   const added = [];
   for (const c of pack.cards) {
     const k = `${c.n}|${c.printing}`;
     if (collection[k]) collection[k].count += 1;
     else { collection[k] = { count: 1, firstAt: Date.now() }; added.push(k); }
   }
-  return { added, wallet, stats: { byRarity: {}, godPacks: 0, packsOpened: 0 } };
+  return { ok: true, pack, added, wallet, stats: { byRarity: {}, godPacks: 0, packsOpened: 0 } };
 });
-ipcMain.handle('packs:add', () => wallet);
+ipcMain.handle('packs:add', (_e, { count }) => {
+  wallet.packs += count;
+  wallet.lifetimeEarned += count;
+  return { ok: true, wallet };
+});
 ipcMain.handle('tracker:get', () => ({
   enabled: false, logDir: '', rules: DEFAULT_RULES,
   progress: {}, feed: [], suggestions: [],

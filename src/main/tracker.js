@@ -19,9 +19,47 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { MAX_PACK_GRANT } from './store.js';
+
 const WATCH_EXTENSIONS = new Set(['.txt', '.log']);
 const POLL_MS = 2000;
 const MAX_CHUNK = 512 * 1024; // don't try to swallow a huge file in one go
+const CHECKPOINT_BYTES = 128;
+
+function boundedInteger(value, fallback, min, max) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) ? Math.min(max, Math.max(min, number)) : fallback;
+}
+
+function readTail(file, offset) {
+  const length = Math.min(CHECKPOINT_BYTES, offset);
+  if (length === 0) return '';
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const buffer = Buffer.alloc(length);
+    fs.readSync(fd, buffer, 0, length, offset - length);
+    return buffer.toString('base64');
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) try { fs.closeSync(fd); } catch { /* ignore */ }
+  }
+}
+
+const identityOf = (stat) => `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`;
+
+function checkpoint(file, stat, offset) {
+  return { identity: identityOf(stat), offset, tail: readTail(file, offset) };
+}
+
+function checkpointChanged(file, stat, offset, saved) {
+  if (!saved || typeof saved !== 'object') return false;
+  if (saved.identity !== identityOf(stat)) return true;
+  if (saved.offset !== offset || stat.size < offset || saved.tail == null) return false;
+  const currentTail = readTail(file, offset);
+  return currentTail !== null && currentTail !== saved.tail;
+}
 
 export class ProTracker {
   /**
@@ -45,9 +83,19 @@ export class ProTracker {
 
     // Seed offsets to end-of-file on first sight so enabling the tracker does
     // not pay out for a month of history the player already played.
+    cfg.fileState ||= {};
     for (const file of this.#logFiles()) {
       if (cfg.offsets[file] === undefined) {
-        try { cfg.offsets[file] = fs.statSync(file).size; } catch { /* ignore */ }
+        try {
+          const stat = fs.statSync(file);
+          cfg.offsets[file] = stat.size;
+          cfg.fileState[file] = checkpoint(file, stat, stat.size);
+        } catch { /* ignore */ }
+      } else if (cfg.fileState[file] === undefined) {
+        try {
+          const stat = fs.statSync(file);
+          cfg.fileState[file] = checkpoint(file, stat, Math.min(cfg.offsets[file], stat.size));
+        } catch { /* ignore */ }
       }
     }
     this.store.saveSoon();
@@ -83,15 +131,25 @@ export class ProTracker {
   poll() {
     const cfg = this.config;
     if (!cfg.enabled) return;
+    cfg.fileState ||= {};
     const lines = [];
 
     for (const file of this.#logFiles()) {
       let stat;
       try { stat = fs.statSync(file); } catch { continue; }
       let from = cfg.offsets[file];
-      if (from === undefined) from = stat.size;      // new file: start at its end
+      if (from === undefined) {
+        // start() already seeded every pre-existing file to EOF. A file first
+        // seen while running is a new daily log, so its first lines are new too.
+        from = 0;
+      }
+      if (checkpointChanged(file, stat, from, cfg.fileState[file])) from = 0;
       if (stat.size < from) from = 0;                // file was rotated/truncated
-      if (stat.size === from) continue;
+      if (stat.size === from) {
+        cfg.offsets[file] = stat.size;
+        cfg.fileState[file] = checkpoint(file, stat, stat.size);
+        continue;
+      }
 
       const start = Math.max(from, stat.size - MAX_CHUNK);
       let text = '';
@@ -104,6 +162,7 @@ export class ProTracker {
       } catch { continue; }
 
       cfg.offsets[file] = stat.size;
+      cfg.fileState[file] = checkpoint(file, stat, stat.size);
       for (const line of text.split(/\r?\n/)) {
         const trimmed = line.trim();
         if (trimmed) lines.push(trimmed);
@@ -127,24 +186,37 @@ export class ProTracker {
         try { re = new RegExp(rule.pattern, 'i'); } catch { continue; }
         if (!re.test(line)) continue;
 
-        const p = cfg.progress[rule.id] || { hits: 0, awarded: 0, lastAwardAt: 0, day: today, dayCount: 0 };
+        const saved = cfg.progress[rule.id] || {};
+        const p = {
+          hits: boundedInteger(saved.hits, 0, 0, Number.MAX_SAFE_INTEGER),
+          awarded: boundedInteger(saved.awarded, 0, 0, Number.MAX_SAFE_INTEGER),
+          lastAwardAt: boundedInteger(saved.lastAwardAt, 0, 0, Number.MAX_SAFE_INTEGER),
+          day: typeof saved.day === 'string' ? saved.day : today,
+          dayCount: boundedInteger(saved.dayCount, 0, 0, MAX_PACK_GRANT),
+        };
         if (p.day !== today) { p.day = today; p.dayCount = 0; }
 
         p.hits += 1;
 
         const now = Date.now();
-        const everyN = Math.max(1, rule.everyN || 1);
+        const everyN = boundedInteger(rule.everyN, 1, 1, 1_000_000);
         const readyByCount = p.hits % everyN === 0;
-        const offCooldown = now - (p.lastAwardAt || 0) >= (rule.cooldownSec || 0) * 1000;
-        const underCap = p.dayCount < (rule.dailyCap ?? Infinity);
+        const cooldownSec = boundedInteger(rule.cooldownSec, 0, 0, 31_536_000);
+        const offCooldown = now - (p.lastAwardAt || 0) >= cooldownSec * 1000;
+        const dailyCap = rule.dailyCap == null
+          ? MAX_PACK_GRANT
+          : boundedInteger(rule.dailyCap, 0, 0, MAX_PACK_GRANT);
+        const remaining = Math.max(0, dailyCap - p.dayCount);
 
-        if (readyByCount && offCooldown && underCap) {
-          const packs = Math.max(1, rule.packs || 1);
+        if (readyByCount && offCooldown && remaining > 0) {
+          const requested = boundedInteger(rule.packs, 1, 1, MAX_PACK_GRANT);
+          const packs = Math.min(requested, remaining);
           p.awarded += packs;
           p.lastAwardAt = now;
           p.dayCount += packs;
-          this.store.addPacks(packs, `${rule.label} - ${line.slice(0, 120)}`);
-          awards.push({ ruleId: rule.id, label: rule.label, packs, line });
+          if (this.store.addPacks(packs, `${rule.label} - ${line.slice(0, 120)}`)) {
+            awards.push({ ruleId: rule.id, label: rule.label, packs, line });
+          }
         }
         cfg.progress[rule.id] = p;
         break; // one rule per line, first match wins

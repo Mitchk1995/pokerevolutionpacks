@@ -16,7 +16,17 @@ import urllib.request
 from PIL import Image
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "assets/cards"
-CARDS = json.load(open(sys.argv[2] if len(sys.argv) > 2 else "cards.json"))
+CARDS_FILE = sys.argv[2] if len(sys.argv) > 2 else "data/cards.me2pt5.json"
+with open(CARDS_FILE, encoding="utf-8") as source:
+    payload = json.load(source)
+
+rows = payload.get("cards", []) if isinstance(payload, dict) else payload
+CARDS = []
+for card in rows:
+    number = card.get("number", card.get("n"))
+    if number is None:
+        raise SystemExit(f"card entry in {CARDS_FILE} has no number: {card!r}")
+    CARDS.append({"number": str(number)})
 QUALITY = 80
 
 os.makedirs(OUT, exist_ok=True)

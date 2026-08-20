@@ -8,9 +8,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { Store, DEFAULT_RULES } from './store.js';
+import { Store, DEFAULT_RULES, MAX_PACK_GRANT, normalizeRules } from './store.js';
 import { ProTracker } from './tracker.js';
 import { refreshPrices } from './prices.js';
+import { PackEngine } from '../shared/pack-engine.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(here, '..', '..');
@@ -18,6 +19,7 @@ const ROOT = path.join(here, '..', '..');
 let win = null;
 let store = null;
 let tracker = null;
+let packEngine = null;
 
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
 
@@ -63,6 +65,14 @@ function loadStaticData() {
   };
 }
 
+function getPackEngine() {
+  if (!packEngine) {
+    const data = loadStaticData();
+    packEngine = new PackEngine({ cards: data.cards.cards, model: data.model });
+  }
+  return packEngine;
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1360,
@@ -91,19 +101,32 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
-  serveAppProtocol();
-  store = new Store(path.join(app.getPath('userData'), 'collection.json'));
-  tracker = new ProTracker(store, (awards) => {
-    if (win && !win.isDestroyed()) win.webContents.send('tracker:award', awards);
-  });
-  if (store.state.tracker.enabled) tracker.start();
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
-  createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!win || win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
   });
-});
+
+  app.whenReady().then(() => {
+    serveAppProtocol();
+    store = new Store(path.join(app.getPath('userData'), 'collection.json'));
+    tracker = new ProTracker(store, (awards) => {
+      if (win && !win.isDestroyed()) win.webContents.send('tracker:award', awards);
+    });
+    if (store.state.tracker.enabled) tracker.start();
+
+    createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+}
 
 app.on('window-all-closed', () => {
   tracker?.stop();
@@ -116,18 +139,30 @@ app.on('before-quit', () => store?.flush());
 /* ------------------------------------------------------------------ IPC */
 
 ipcMain.handle('data:load', () => loadStaticData());
-ipcMain.handle('state:get', () => store.state);
+ipcMain.handle('state:get', () => ({ ...store.state, recovery: store.recovery }));
 
-ipcMain.handle('pack:spend', () => ({ ok: store.spendPack(), wallet: store.state.wallet }));
-
-ipcMain.handle('pack:record', (_e, pack) => {
-  const result = store.recordPack(pack);
-  return { ...result, wallet: store.state.wallet, stats: store.state.stats };
+ipcMain.handle('pack:open', () => {
+  const before = structuredClone(store.state);
+  if (!store.spendPack()) return { ok: false, wallet: store.state.wallet };
+  try {
+    const pack = getPackEngine().openPack();
+    const result = store.recordPack(pack);
+    return { ok: true, pack, ...result, wallet: store.state.wallet, stats: store.state.stats };
+  } catch (error) {
+    store.state = before;
+    store.saveSoon();
+    console.error('Could not open pack:', error);
+    return { ok: false, error: 'The pack could not be generated. Your pack was restored.', wallet: store.state.wallet };
+  }
 });
 
-ipcMain.handle('packs:add', (_e, { count, reason }) => {
-  store.addPacks(Math.max(1, Number(count) || 1), reason || 'Manually added');
-  return store.state.wallet;
+ipcMain.handle('packs:add', (_e, payload) => {
+  const { count, reason } = payload && typeof payload === 'object' ? payload : {};
+  if (!Number.isSafeInteger(count) || count < 1 || count > MAX_PACK_GRANT) {
+    return { ok: false, error: `Enter a whole number from 1 to ${MAX_PACK_GRANT}.`, wallet: store.state.wallet };
+  }
+  store.addPacks(count, reason || 'Manually added');
+  return { ok: true, wallet: store.state.wallet };
 });
 
 ipcMain.handle('tracker:get', () => ({
@@ -137,13 +172,15 @@ ipcMain.handle('tracker:get', () => ({
 }));
 
 ipcMain.handle('tracker:set', (_e, patch) => {
+  patch = patch && typeof patch === 'object' ? patch : {};
   const cfg = store.state.tracker;
   if (patch.logDir !== undefined && patch.logDir !== cfg.logDir) {
-    cfg.logDir = patch.logDir;
+    cfg.logDir = typeof patch.logDir === 'string' ? patch.logDir.slice(0, 32_767) : '';
     cfg.offsets = {};   // new folder, start fresh at its current end
+    cfg.fileState = {};
   }
   if (patch.enabled !== undefined) cfg.enabled = !!patch.enabled;
-  if (patch.rules !== undefined) cfg.rules = patch.rules;
+  if (patch.rules !== undefined) cfg.rules = normalizeRules(patch.rules);
   store.saveSoon();
 
   const status = cfg.enabled ? tracker.start() : (tracker.stop(), { ok: false, reason: 'disabled' });

@@ -31,20 +31,27 @@ with no network connection. Prices refresh online when you ask them to.
 ### The easy way
 
 Grab the `.exe` from [the latest release](../../releases/latest), or from the
-**Artifacts** of any green [Build workflow run](../../actions/workflows/build.yml).
+**Artifacts** of a main, tagged, or manually-triggered
+[Build workflow run](../../actions/workflows/build.yml).
 Two flavours are produced:
 
-- `PokeRevolution Packs-1.0.0-x64.exe` — installer, adds a Start Menu entry
-- `PokeRevolution Packs-1.0.0-portable.exe` — single file, run it from anywhere
+- the file ending in `-x64.exe` — installer, adds a Start Menu entry
+- the file ending in `-portable.exe` — single file, run it from anywhere
 
 No install of Node, Python or anything else needed.
 
 ### From source
 
+Install [Node.js 22.12 or newer](https://nodejs.org/), then either double-click
+`START.bat` on Windows or run:
+
 ```bash
-npm install
+npm ci
 npm start
 ```
+
+`START.bat` performs the locked dependency install automatically on its first
+run and leaves the error visible if setup or launch fails.
 
 To build the installer yourself:
 
@@ -52,6 +59,17 @@ To build the installer yourself:
 npm run dist          # Windows .exe  (run this on Windows)
 npm run dist:linux    # Linux AppImage
 ```
+
+Useful verification commands:
+
+```bash
+npm test              # unit, persistence, tracker, and 1,000,000-pack tests
+npm run smoke         # graphical UI check; writes screenshots to shots/
+npm run pack          # assemble an unpacked app without creating an installer
+```
+
+The smoke check opens a real Electron window. On a headless Linux runner, use
+`xvfb-run -a npm run smoke`.
 
 ## The odds
 
@@ -160,6 +178,9 @@ npm run build:data     # cards + prices
 npm run build:images   # card art (needs Python + Pillow)
 ```
 
+The tool launcher detects `py`, `python3`, or `python`. If Python is installed
+somewhere unusual, set `POKEREV_PYTHON` to its executable path.
+
 ## Credits
 
 The holographic card effect is ported from
@@ -180,3 +201,7 @@ credited in [docs/PULL-RATES.md](docs/PULL-RATES.md). Interface type is
 A personal project, not affiliated with Nintendo, Game Freak, The Pokémon
 Company or Pokémon Revolution Online. Pokémon and all card images are their
 respective owners' property.
+
+The original application source is available under the [MIT License](LICENSE).
+Bundled third-party assets and data remain under their respective owners' terms;
+see [NOTICE](NOTICE) and the credits above.

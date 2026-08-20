@@ -8,8 +8,7 @@ contextBridge.exposeInMainWorld('api', {
   loadData: () => ipcRenderer.invoke('data:load'),
   getState: () => ipcRenderer.invoke('state:get'),
 
-  spendPack: () => ipcRenderer.invoke('pack:spend'),
-  recordPack: (pack) => ipcRenderer.invoke('pack:record', pack),
+  openPack: () => ipcRenderer.invoke('pack:open'),
   addPacks: (count, reason) => ipcRenderer.invoke('packs:add', { count, reason }),
 
   tracker: {

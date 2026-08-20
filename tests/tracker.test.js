@@ -57,6 +57,29 @@ test('history present before enabling is not paid out', () => {
   tracker.stop();
 });
 
+test('a log file created after startup is read from its first line', () => {
+  const { logs, store } = scratch();
+  store.state.tracker.rules = [{
+    id: 'badge', label: 'Badge', pattern: 'badge',
+    packs: 1, everyN: 1, cooldownSec: 0, dailyCap: 10, enabled: true,
+  }];
+  const tracker = new ProTracker(store, () => {});
+  tracker.start();
+
+  const file = path.join(logs, '2026-08-21.txt');
+  fs.writeFileSync(file, 'You have earned the Boulder Badge!\n');
+  const before = store.state.wallet.packs;
+
+  tracker.poll();
+  assert.equal(store.state.wallet.packs, before + 1, 'the first event in a new daily log is paid');
+  assert.equal(store.state.tracker.offsets[file], fs.statSync(file).size, 'the read offset is persisted');
+
+  append(file, 'You have earned the Cascade Badge!');
+  tracker.poll();
+  assert.equal(store.state.wallet.packs, before + 2, 'later lines in that file are tailed');
+  tracker.stop();
+});
+
 test('everyN means only every Nth match pays', () => {
   const { logs, store } = scratch();
   // Catch rule: 1 pack every 10 matches, no cooldown for this test.
@@ -93,8 +116,8 @@ test('the daily cap holds', () => {
   tracker.poll();
 
   const gained = store.state.wallet.packs - before;
-  assert.ok(gained <= 15, `daily cap should stop runaway payouts, got ${gained}`);
-  assert.ok(gained >= 5, 'but at least one award should land');
+  assert.equal(gained, 12, 'the last award is clamped to the remaining daily allowance');
+  assert.equal(store.state.tracker.progress.shiny.dayCount, 12);
   tracker.stop();
 });
 
@@ -145,6 +168,28 @@ test('a truncated or rotated log is re-read from the start, not skipped', () => 
   tracker.poll();
 
   assert.equal(store.state.wallet.packs, before + 10);
+  tracker.stop();
+});
+
+test('an equal-size rewritten log is detected and read from the start', () => {
+  const { logs, store } = scratch();
+  store.state.tracker.rules = [{
+    id: 'badge', label: 'Badge', pattern: 'badge',
+    packs: 1, everyN: 1, cooldownSec: 0, dailyCap: 10, enabled: true,
+  }];
+  const tracker = new ProTracker(store, () => {});
+  const file = path.join(logs, '2026-08-20.txt');
+  const original = `${'x'.repeat(100)}\n`;
+  fs.writeFileSync(file, original);
+  tracker.start();
+
+  const replacement = 'You have earned the Boulder Badge!'.padEnd(original.length - 1, ' ') + '\n';
+  assert.equal(Buffer.byteLength(replacement), Buffer.byteLength(original));
+  const before = store.state.wallet.packs;
+  fs.writeFileSync(file, replacement);
+  tracker.poll();
+
+  assert.equal(store.state.wallet.packs, before + 1);
   tracker.stop();
 });
 
