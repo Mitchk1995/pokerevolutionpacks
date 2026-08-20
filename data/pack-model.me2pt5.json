@@ -1,0 +1,109 @@
+{
+  "$comment": [
+    "Pack model for Pokemon TCG: Mega Evolution - Ascended Heroes (me2pt5).",
+    "Every probability here is sourced, not invented. See 'sources' below and",
+    "docs/PULL-RATES.md for the full derivation and the arithmetic that shows",
+    "this slot model reproduces the published per-pack rates exactly."
+  ],
+  "setId": "me2pt5",
+  "setName": "Ascended Heroes",
+  "series": "Mega Evolution",
+  "releaseDate": "2026-01-30",
+  "cardsPerPack": 10,
+  "alsoInPack": [
+    "1 Basic Energy card",
+    "1 Pokemon TCG Live code card"
+  ],
+
+  "godPack": {
+    "enabled": true,
+    "rate": 0.001,
+    "rateNote": "Community-estimated at roughly 1 in 950-1000 packs. NOT part of the TCGplayer study, which explicitly excluded god packs.",
+    "confidence": "estimated",
+    "contents": [
+      { "rarity": "MEGA_ATTACK_RARE", "count": 3 },
+      { "rarity": "Special Illustration Rare", "count": 7 }
+    ]
+  },
+
+  "slots": [
+    { "id": "c1", "kind": "pool", "rarity": "Common", "printing": "normal" },
+    { "id": "c2", "kind": "pool", "rarity": "Common", "printing": "normal" },
+    { "id": "c3", "kind": "pool", "rarity": "Common", "printing": "normal" },
+    { "id": "c4", "kind": "pool", "rarity": "Common", "printing": "normal" },
+    { "id": "u1", "kind": "pool", "rarity": "Uncommon", "printing": "normal" },
+    { "id": "u2", "kind": "pool", "rarity": "Uncommon", "printing": "normal" },
+    { "id": "u3", "kind": "pool", "rarity": "Uncommon", "printing": "normal" },
+    {
+      "id": "rh1",
+      "kind": "reverse",
+      "label": "Reverse Holo",
+      "$comment": "First of the two reverse-holo slots introduced in the Scarlet & Violet pack configuration. Always a reverse holo."
+    },
+    {
+      "id": "rh2",
+      "kind": "reverse",
+      "label": "Reverse Holo / Illustration Rare",
+      "$comment": "Second reverse-holo slot. PokeBeach: 'If you pull either an Illustration Rare or a Special Illustration Rare they will take the place of the second reverse holo slot.'",
+      "upgrades": [
+        { "rarity": "Illustration Rare", "p": 0.1111111111, "odds": "1 in 9" },
+        { "rarity": "Special Illustration Rare", "p": 0.0142857143, "odds": "1 in 70" }
+      ]
+    },
+    {
+      "id": "hit",
+      "kind": "hit",
+      "label": "Holo / Rare",
+      "$comment": "The guaranteed-holo slot. Falls through to a Holo Rare when no higher rarity is rolled.",
+      "outcomes": [
+        { "rarity": "Double Rare", "p": 0.2, "odds": "1 in 5" },
+        { "rarity": "Ultra Rare", "p": 0.0476190476, "odds": "1 in 21" },
+        { "rarity": "MEGA_ATTACK_RARE", "p": 0.0344827586, "odds": "1 in 29" },
+        { "rarity": "Mega Hyper Rare", "p": 0.0018518519, "odds": "1 in 540" },
+        { "rarity": "Rare", "p": "remainder", "odds": "~1 in 1.4" }
+      ]
+    }
+  ],
+
+  "assumptions": [
+    {
+      "id": "mar-slot",
+      "text": "Mega Attack Rares are placed in the holo/hit slot rather than the second reverse-holo slot. MARs are full-art Mega Pokemon ex, i.e. members of the ultra-rare family, while the reverse slot is documented to be taken by the illustration-style secret rares (IR/SIR). No source states the MAR slot explicitly.",
+      "impact": "Per-pack marginal rates are identical either way and match the published figures exactly. Only the joint distribution differs: with this choice a Mega Attack Rare and a Double Rare cannot appear in the same pack.",
+      "howToChange": "Move the MEGA_ATTACK_RARE entry from slots[hit].outcomes into slots[rh2].upgrades. No code change needed."
+    },
+    {
+      "id": "godpack-rate",
+      "text": "The god pack rate of 1/1000 is a community estimate, not a measured figure. God packs were excluded from the TCGplayer study, so the per-rarity rates above are conditional on a normal pack - which is exactly how the engine applies them.",
+      "impact": "Affects roughly 0.1% of packs.",
+      "howToChange": "Edit godPack.rate, or set godPack.enabled to false."
+    }
+  ],
+
+  "sources": [
+    {
+      "what": "Per-rarity pull rates, from 2,000+ packs opened by the TCGplayer Authentication Center",
+      "url": "https://www.pokebeach.com/2026/02/ascended-heroes-pull-rates-finally-determined-better-than-usual"
+    },
+    {
+      "what": "Independent citation of the same TCGplayer study (corroborates every figure)",
+      "url": "https://eternacards.co.uk/blogs/trading-card-game-news/ascended-heroes-pull-rates-revealed-after-2-000-packs-opened"
+    },
+    {
+      "what": "Scarlet & Violet pack configuration: 4 commons, 3 uncommons, 2 reverse holos, 1 holo; IR/SIR replace the second reverse holo",
+      "url": "https://www.pokebeach.com/2023/03/scarlet-violet-booster-pack-configuration-finally-revealed-major-exciting-changes"
+    },
+    {
+      "what": "Ascended Heroes set guide: god pack contents (3 Mega Attack Rares + 7 Special Illustration Rares), multiple reverse holo styles, 295 cards / 217 main set",
+      "url": "https://www.pokebeach.com/2026/01/ascended-heroes-set-guide-full-set-list-god-packs-reverse-holos-product-lineup-and-more"
+    },
+    {
+      "what": "Card list, rarities and card images",
+      "url": "https://github.com/PokemonTCG/pokemon-tcg-data"
+    },
+    {
+      "what": "TCGplayer market prices and printing variants (daily mirror)",
+      "url": "https://tcgcsv.com/"
+    }
+  ]
+}

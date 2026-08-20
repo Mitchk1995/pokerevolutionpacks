@@ -1,0 +1,55 @@
+{
+  "name": "pokerevolutionpacks",
+  "productName": "PokeRevolution Packs",
+  "version": "1.0.0",
+  "description": "A realistic Pokemon TCG pack simulator for Ascended Heroes, with a collection binder, live market values, and pack rewards earned from Pokemon Revolution Online progress.",
+  "type": "module",
+  "main": "src/main/main.js",
+  "author": "mitchk1995",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.js",
+    "build:data": "python3 tools/build_data.py",
+    "build:images": "python3 tools/fetch_images.py assets/cards tools/_numbers.json",
+    "dist": "electron-builder --win --x64",
+    "dist:linux": "electron-builder --linux",
+    "pack": "electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.mitchk1995.pokerevolutionpacks",
+    "productName": "PokeRevolution Packs",
+    "directories": { "output": "dist" },
+    "files": [
+      "src/**/*",
+      "data/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "PokeRevolution Packs"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Game"
+    }
+  }
+}
