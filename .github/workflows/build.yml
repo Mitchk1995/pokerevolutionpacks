@@ -25,6 +25,9 @@ jobs:
     name: Windows executable
     needs: test
     runs-on: windows-latest
+    # Needed so the tagged build can create the release and attach the exes.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
